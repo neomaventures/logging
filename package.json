@@ -1,0 +1,113 @@
+{
+  "name": "@neomaventures/logging",
+  "version": "0.0.1",
+  "description": "Pino-backed logging for NestJS — an injectable Logger interface, per-request correlation without request scope, and a mock for tests.",
+  "type": "commonjs",
+  "author": "Daniel Bruce",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neomaventures/logging.git"
+  },
+  "bugs": {
+    "url": "https://github.com/neomaventures/logging/issues"
+  },
+  "homepage": "https://github.com/neomaventures/logging#readme",
+  "keywords": [
+    "nestjs",
+    "logging",
+    "pino",
+    "logger",
+    "request-id",
+    "correlation",
+    "typescript"
+  ],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "!**/*.json",
+    "!**/*.tsbuildinfo"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc -p ./tsconfig.lib.json",
+    "test": "jest --runInBand --passWithNoTests",
+    "pretest:e2e": "pnpm build",
+    "test:e2e": "NEOMA_MANAGED_APP_MODULE_PATH=e2e/app/application.module.ts#ApplicationModule NODE_OPTIONS=--experimental-vm-modules jest --config ./e2e/jest-e2e.json --runInBand",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "check:package": "pnpm build && publint && attw --pack",
+    "prepublishOnly": "pnpm build"
+  },
+  "peerDependencies": {
+    "@neomaventures/request-context": "^0.1.0",
+    "@nestjs/common": "11.x",
+    "@nestjs/core": "11.x",
+    "rxjs": ">=7"
+  },
+  "dependencies": {
+    "pino": "^10.1.0"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@eslint/js": "^10.0.1",
+    "@faker-js/faker": "^9.6.0",
+    "@neomaventures/managed-app": "^0.1.2",
+    "@neomaventures/mocks": "^0.1.0",
+    "@neomaventures/request-context": "^0.1.0",
+    "@nestjs/common": "^11.1.18",
+    "@nestjs/core": "^11.1.18",
+    "@nestjs/platform-express": "^11.1.18",
+    "@nestjs/testing": "^11.1.18",
+    "@swc/core": "^1.12.1",
+    "@swc/jest": "^0.2.39",
+    "@types/express": "^5.0.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.5.2",
+    "@types/supertest": "^6.0.2",
+    "eslint": "^10.2.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-import-x": "^4.16.2",
+    "eslint-plugin-jest": "^29.15.3",
+    "eslint-plugin-jest-extended": "^3.0.1",
+    "eslint-plugin-prettier": "^5.5.5",
+    "eslint-plugin-yml": "^3.3.2",
+    "express": "^5.0.0",
+    "globals": "^17.4.0",
+    "jest": "^30.3.0",
+    "jest-extended": "^7.0.0",
+    "prettier": "^3.4.2",
+    "publint": "^0.3.25",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "supertest": "^7.0.0",
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.58.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "packageManager": "pnpm@10.5.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "typesVersions": {
+    "*": {
+      "testing": [
+        "dist/testing/index.d.ts"
+      ]
+    }
+  }
+}
