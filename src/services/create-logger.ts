@@ -10,6 +10,8 @@ import {
   type LogLevel,
 } from "../interfaces/logger.interface"
 import { type LoggingModuleOptions } from "../interfaces/logging-module-options.interface"
+import { serializeRequest } from "../serializers/request.serializer"
+import { serializeResponse } from "../serializers/response.serializer"
 
 const REDACTED = "[REDACTED]"
 const NAMESPACED_FLOOR: LogLevel = "error"
@@ -33,6 +35,8 @@ const buildRoot = (options: LoggingModuleOptions): pino.Logger => {
       // Lowest possible level on the root — per-child levels enforce filtering.
       level: "trace",
       redact: { paths: [...redact], censor: REDACTED },
+      // Merged with pino's default `err` serializer.
+      serializers: { req: serializeRequest, res: serializeResponse },
       // Omitting `base` entirely preserves pino's default `pid` + `hostname`.
       // Passing `base: {...}` replaces those defaults, so we only set it when
       // the consumer supplied a context and we can merge the defaults back in.

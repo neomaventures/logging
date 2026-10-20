@@ -89,7 +89,7 @@ export function logBoot(stage: string): void {
 }
 ```
 
-Static calls route through the constructed singleton. They no-op silently if called before `LoggingModule.forRoot()` has been registered (e.g. at module-init time before the app is bootstrapped).
+Static calls route through the constructed singleton. They no-op silently if called before `LoggingModule.forRoot` has been registered (e.g. at module-init time before the app is bootstrapped).
 
 ## Namespaced loggers (`forFeature`)
 
@@ -150,14 +150,22 @@ Bound directly to `forRoot.defaultLevel` (default `'info'`). No override chain.
 ### Example
 
 ```ts
+import {
+  LOGGING_NAMESPACE,
+  LoggingModule,
+  LogLevel,
+} from "@neomaventures/logging"
+
 LoggingModule.forRoot({
   defaultLevel: LogLevel.Debug,
-  loggers: [{ namespace: "neomaventures:auth", level: LogLevel.Trace }],
+  loggers: [{ namespace: LOGGING_NAMESPACE, level: LogLevel.Info }],
 })
 ```
 
 - `ApplicationLogger` emits at `debug` and above.
-- The `neomaventures:auth` logger emits at `trace` and above.
+- The package's own request logger (`neomaventures:logging`) emits at `info`
+  and above, so handled requests are logged. See
+  [Request logging](#request-logging).
 - Every other namespaced logger floors at `error`.
 
 ### Silencing a namespaced logger
@@ -208,6 +216,68 @@ try {
 }
 ```
 
+## Request and response fields
+
+Entries made during a request carry `req`, and the request logger's completion
+entry carries `res`. Both are reduced to the fields worth logging:
+
+```json
+{
+  "req": {
+    "method": "GET",
+    "path": "/accounts/7f3a9c2e/ingestions",
+    "route": "/accounts/:id/ingestions",
+    "ip": "203.0.113.7",
+    "headers": {
+      "accept": "text/html",
+      "user-agent": "Mozilla/5.0 …",
+      "x-request-id": "b1946ac9"
+    }
+  },
+  "res": {
+    "statusCode": 200,
+    "headers": { "content-type": "text/html; charset=utf-8" }
+  }
+}
+```
+
+- **`path`** is the request path with its ids and **without the query string**,
+  which can carry secrets such as OAuth codes. It is correct in middleware too.
+- **`route`** is the matched route pattern, for grouping by endpoint. It is only
+  present once Nest has routed the request, so entries made in middleware omit
+  it.
+- **`headers`** are allow-listed: `accept`, `content-type`, `content-length`,
+  `user-agent` and `x-request-id` on the request; `content-type` and
+  `content-length` on the response. Cookies, `authorization`, `set-cookie` and
+  everything else are never logged.
+
+## Request logging
+
+`forRoot` registers a request logger that brackets every route handler with
+an entry when the request is dispatched and one when it completes. It logs under
+its own namespace, **`neomaventures:logging`**:
+
+- **Handled requests** are logged at `info`. Like every namespace it floors at
+  `error`, so they are **off by default** — raising your `defaultLevel` does not
+  turn them on.
+- **Failed requests** (the handler threw) are logged at `error`, so they are on
+  by default. Set `logErrors: false` to turn them off.
+
+To log handled requests, raise the namespace. It is exported as
+`LOGGING_NAMESPACE` so a typo can't silently miss it:
+
+```ts
+import {
+  LOGGING_NAMESPACE,
+  LoggingModule,
+  LogLevel,
+} from "@neomaventures/logging"
+
+LoggingModule.forRoot({
+  loggers: [{ namespace: LOGGING_NAMESPACE, level: LogLevel.Info }],
+})
+```
+
 ## Configuration
 
 ```ts
@@ -247,6 +317,10 @@ LoggingModule.forRootAsync({
   }),
 })
 ```
+
+`forRootAsync` is built with Nest's `ConfigurableModuleBuilder`, so it accepts
+the standard async options: `useFactory` (with `imports` / `inject`),
+`useClass` or `useExisting`.
 
 ## Testing
 
@@ -313,34 +387,6 @@ const module = await Test.createTestingModule({
 ## Known limitations
 
 Tracked for a later release. Read these before depending on the package.
-
-### The whole request object is attached to every entry
-
-`getRequest()` returns the live Express request and it is attached verbatim as
-`req`, with no pino serializer configured. Two consequences:
-
-1. **Entries are large.** The full request — headers, socket details and all —
-   is stringified on every line, not the method/url summary you probably want.
-2. **Credentials are logged by default.** `redact` defaults to `[]`, so
-   `req.headers.cookie` and `req.headers.authorization` reach your log
-   aggregator in clear text.
-
-Until this is fixed, set `redact` explicitly:
-
-```ts
-LoggingModule.forRoot({
-  redact: [
-    "req.headers.cookie",
-    "req.headers.authorization",
-    "req.headers['set-cookie']",
-  ],
-})
-```
-
-The fix is to apply `pino.stdSerializers.req` (or a narrower project-specific
-serializer) by default, so `req` reduces to `method`, `url`, `headers`,
-`remoteAddress` and `remotePort`. That changes the shape of emitted logs, so it
-is a breaking change and is deliberately not in this release.
 
 ### Namespace matching is exact, and silent when it misses
 

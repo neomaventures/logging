@@ -8,12 +8,17 @@ import {
 import { PATH_METADATA } from "@nestjs/common/constants"
 import { type Observable, tap } from "rxjs"
 
+import { InjectLogger } from "../decorators/inject-logger.decorator"
+import { type Logger } from "../interfaces/logger.interface"
 import { type LoggingModuleOptions } from "../interfaces/logging-module-options.interface"
-import { ApplicationLogger } from "../services/application-logger"
-import { LOGGING_MODULE_OPTIONS } from "../symbols"
+import { LOGGING_MODULE_OPTIONS, LOGGING_NAMESPACE } from "../symbols"
 
 /**
  * Interceptor that logs requests going into and coming out of route handlers.
+ *
+ * Logs under the `neomaventures:logging` namespace: handled requests at
+ * `info`, failed ones at `error`. Like every namespace it floors at `error`,
+ * so handled requests are only logged once the app raises it.
  */
 @Injectable()
 export class RequestLoggerInterceptor implements NestInterceptor {
@@ -22,12 +27,13 @@ export class RequestLoggerInterceptor implements NestInterceptor {
    *
    * @param config - Subset of the module's options consumed by this interceptor.
    * @param config.logErrors - Whether to log errors that occur in route handlers (default: true).
-   * @param logger - The ApplicationLogger instance used for logging.
+   * @param logger - The package's `neomaventures:logging` namespaced logger.
    */
   public constructor(
     @Inject(LOGGING_MODULE_OPTIONS)
     private readonly config: Pick<LoggingModuleOptions, "logErrors">,
-    private readonly logger: ApplicationLogger,
+    @InjectLogger(LOGGING_NAMESPACE)
+    private readonly logger: Logger,
   ) {}
 
   public intercept(
@@ -46,7 +52,7 @@ export class RequestLoggerInterceptor implements NestInterceptor {
       handler: { name: context.getHandler().name, path: handlerPath },
     }
 
-    this.logger.debug(
+    this.logger.info(
       "Processing an incoming request and dispatching it to a route handler.",
       route,
     )
@@ -55,7 +61,7 @@ export class RequestLoggerInterceptor implements NestInterceptor {
       tap({
         next: () => {
           const response = context.switchToHttp().getResponse()
-          this.logger.debug(
+          this.logger.info(
             "Processed an incoming request that was successfully handled by a route handler.",
             {
               ...route,
