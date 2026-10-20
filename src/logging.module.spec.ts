@@ -320,7 +320,7 @@ describe("LoggingModule", () => {
         class FeatureModule {}
 
         const module = await Test.createTestingModule({
-          imports: [LoggingModule.forRoot(), FeatureModule],
+          imports: [LoggingModule.forRoot({}), FeatureModule],
         }).compile()
 
         const feature = module.get(FeatureService)

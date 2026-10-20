@@ -21,7 +21,7 @@ describe("@InjectLogger", () => {
 
     it("should inject the same ApplicationLogger instance the module provides", async () => {
       const module = await Test.createTestingModule({
-        imports: [LoggingModule.forRoot()],
+        imports: [LoggingModule.forRoot({})],
         providers: [SUT],
       }).compile()
 

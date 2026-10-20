@@ -1,4 +1,4 @@
-import { type ModuleMetadata } from "@nestjs/common"
+import { type ConfigurableModuleAsyncOptions } from "@nestjs/common"
 
 import { type LoggerConfig } from "./logger-config.interface"
 import { type LogLevel } from "./logger.interface"
@@ -77,8 +77,9 @@ export interface LoggingModuleOptions {
 }
 
 /**
- * Async counterpart to {@link LoggingModuleOptions}. Mirrors the standard
- * NestJS `useFactory` async-module shape.
+ * Async counterpart to {@link LoggingModuleOptions}: NestJS's standard async
+ * module options — `useFactory` (with `imports` / `inject`), `useClass` or
+ * `useExisting`.
  *
  * @see LoggingModule.forRootAsync
  *
@@ -93,13 +94,5 @@ export interface LoggingModuleOptions {
  * })
  * ```
  */
-export interface LoggingModuleAsyncOptions {
-  /** Modules required to resolve `inject` tokens inside `useFactory`. */
-  imports?: ModuleMetadata["imports"]
-  /** Providers injected positionally into `useFactory`. */
-  inject?: any[]
-  /** Factory returning resolved {@link LoggingModuleOptions} (sync or async). */
-  useFactory: (
-    ...args: any[]
-  ) => LoggingModuleOptions | Promise<LoggingModuleOptions>
-}
+export type LoggingModuleAsyncOptions =
+  ConfigurableModuleAsyncOptions<LoggingModuleOptions>

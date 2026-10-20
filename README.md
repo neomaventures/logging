@@ -89,7 +89,7 @@ export function logBoot(stage: string): void {
 }
 ```
 
-Static calls route through the constructed singleton. They no-op silently if called before `LoggingModule.forRoot()` has been registered (e.g. at module-init time before the app is bootstrapped).
+Static calls route through the constructed singleton. They no-op silently if called before `LoggingModule.forRoot` has been registered (e.g. at module-init time before the app is bootstrapped).
 
 ## Namespaced loggers (`forFeature`)
 
@@ -253,7 +253,7 @@ entry carries `res`. Both are reduced to the fields worth logging:
 
 ## Request logging
 
-`forRoot()` registers a request logger that brackets every route handler with
+`forRoot` registers a request logger that brackets every route handler with
 an entry when the request is dispatched and one when it completes. It logs under
 its own namespace, **`neomaventures:logging`**:
 
@@ -317,6 +317,10 @@ LoggingModule.forRootAsync({
   }),
 })
 ```
+
+`forRootAsync` is built with Nest's `ConfigurableModuleBuilder`, so it accepts
+the standard async options: `useFactory` (with `imports` / `inject`),
+`useClass` or `useExisting`.
 
 ## Testing
 

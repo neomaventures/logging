@@ -27,7 +27,7 @@ describe("ApplicationLogger", () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      imports: [LoggingModule.forRoot()],
+      imports: [LoggingModule.forRoot({})],
     })
       .overrideProvider(LOGGING_MODULE_OPTIONS)
       .useValue({ destination: new ArrayStream(), defaultLevel: "trace" })
@@ -44,9 +44,9 @@ describe("ApplicationLogger", () => {
   })
 
   describe("Default Configuration", () => {
-    it("should default to 'info' level when using forRoot() with no options", async () => {
+    it("should default to 'info' level when using forRoot({})", async () => {
       const module: TestingModule = await Test.createTestingModule({
-        imports: [LoggingModule.forRoot()],
+        imports: [LoggingModule.forRoot({})],
       })
         .overrideProvider(LOGGING_MODULE_OPTIONS)
         .useValue({ destination: new ArrayStream() })
