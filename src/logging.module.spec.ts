@@ -5,6 +5,7 @@ import { RequestContextModule } from "@neomaventures/request-context"
 import {
   Controller,
   Get,
+  Param,
   type INestApplication,
   Injectable,
   type MiddlewareConsumer,
@@ -309,6 +310,11 @@ describe("LoggingModule", () => {
 
   describe("request logging", () => {
     const namespace = "neomaventures:logging"
+    const dispatched =
+      "Processing an incoming request and dispatching it to a route handler."
+    const completed =
+      "Processed an incoming request that was successfully handled by a route handler."
+    const failed = "Error processing an incoming request in the route handler."
 
     @Controller("widgets")
     class WidgetsController {
@@ -318,7 +324,9 @@ describe("LoggingModule", () => {
       }
 
       @Get(":id")
-      public get(): void {}
+      public get(@Param("id") id: string): { id: string } {
+        return { id }
+      }
     }
 
     // Logs from middleware, i.e. before Nest has routed the request.
@@ -379,22 +387,65 @@ describe("LoggingModule", () => {
         )
       })
 
-      it("should still log a request whose handler throws", async () => {
+      it("should still log a request whose handler throws, with its route and duration", async () => {
         await request(app.getHttpServer() as App).get("/widgets/fail")
 
         expect(logs).toContainEqual(
           expect.objectContaining({
             level: LogLevelNumber.error,
             ns: namespace,
+            msg: failed,
+            controller: { name: "WidgetsController", path: "widgets" },
+            handler: { name: "fail", path: "fail" },
+            duration: expect.stringMatching(/^\d+ms$/),
             err: expect.objectContaining({ message: "handler failed" }),
           }),
         )
+      })
+
+      it("should still propagate the handler's error to the client", async () => {
+        await request(app.getHttpServer() as App)
+          .get("/widgets/fail")
+          .expect(500)
+      })
+    })
+
+    describe("Given logErrors is false", () => {
+      beforeEach(async () => {
+        logs = []
+        const module = await Test.createTestingModule({
+          imports: [
+            RequestContextModule.forRoot(),
+            LoggingModule.forRoot({
+              destination: new ArrayStream(logs),
+              logErrors: false,
+            }),
+            WidgetsModule,
+          ],
+        }).compile()
+        app = module.createNestApplication({ logger: false })
+        await app.init()
+      })
+
+      it("should not log a request whose handler throws", async () => {
+        await request(app.getHttpServer() as App).get("/widgets/fail")
+
+        expect(logs).not.toContainEqual(
+          expect.objectContaining({ err: expect.anything() }),
+        )
+      })
+
+      it("should still propagate the handler's error to the client", async () => {
+        await request(app.getHttpServer() as App)
+          .get("/widgets/fail")
+          .expect(500)
       })
     })
 
     describe("Given the request logger's namespace is raised to info", () => {
       const id = faker.string.uuid()
       const secret = faker.string.alphanumeric(32)
+      let response: request.Response
 
       beforeEach(async () => {
         logs = []
@@ -412,10 +463,41 @@ describe("LoggingModule", () => {
         app = module.createNestApplication({ logger: false })
         await app.init()
 
-        await request(app.getHttpServer() as App)
+        response = await request(app.getHttpServer() as App)
           .get(`/widgets/${id}?code=${secret}`)
           .set("Cookie", `sid=${secret}`)
           .set("Accept", "application/json")
+      })
+
+      it("should log the request in, then out", () => {
+        expect(
+          logs.filter(({ ns }) => ns === namespace).map(({ msg }) => msg),
+        ).toEqual([dispatched, completed])
+      })
+
+      it("should log the route handler on the way in", () => {
+        expect(logs).toContainEqual(
+          expect.objectContaining({
+            msg: dispatched,
+            controller: { name: "WidgetsController", path: "widgets" },
+            handler: { name: "get", path: ":id" },
+          }),
+        )
+      })
+
+      it("should log the route handler and duration on the way out", () => {
+        expect(logs).toContainEqual(
+          expect.objectContaining({
+            msg: completed,
+            controller: { name: "WidgetsController", path: "widgets" },
+            handler: { name: "get", path: ":id" },
+            duration: expect.stringMatching(/^\d+ms$/),
+          }),
+        )
+      })
+
+      it("should return the handler's response unchanged", () => {
+        expect(response.body).toEqual({ id })
       })
 
       it("should log handled requests at info under its namespace", () => {
