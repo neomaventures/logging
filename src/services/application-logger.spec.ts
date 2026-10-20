@@ -1,149 +1,84 @@
 import { faker } from "@faker-js/faker"
-import { express } from "@neomaventures/mocks"
-import { getRequest } from "@neomaventures/request-context"
-import { Test, type TestingModule } from "@nestjs/testing"
-import { type Request } from "express"
-import { LogLevelNumber, LogMethodTests, ArrayStream } from "fixtures/logging"
-
+import { RequestContextModule } from "@neomaventures/request-context"
 import {
-  ApplicationLogger,
-  type LoggingModuleOptions,
-  LoggingModule,
-} from "../index"
-import { LOGGING_MODULE_OPTIONS } from "../symbols"
+  Controller,
+  Get,
+  type INestApplication,
+  Param,
+  Query,
+} from "@nestjs/common"
+import { Test, type TestingModule } from "@nestjs/testing"
+import { LogLevelNumber, LogMethodTests, ArrayStream } from "fixtures/logging"
+import request from "supertest"
+import { type App } from "supertest/types"
 
-jest.mock("@neomaventures/request-context", () => ({
-  getRequest: jest.fn(),
-}))
+import { ApplicationLogger, LoggingModule, LogLevel } from "../index"
 
-const mockedGetRequest = jest.mocked(getRequest)
+type LogMethod = "trace" | "debug" | "info" | "warn" | "error" | "fatal"
 
 describe("ApplicationLogger", () => {
   const message = faker.hacker.phrase()
   const context = { ctx: faker.lorem.word() }
 
   let service: ApplicationLogger
-  let logOptions: LoggingModuleOptions & { destination: ArrayStream }
+  let logs: any[]
 
   beforeEach(async () => {
+    logs = []
     const module: TestingModule = await Test.createTestingModule({
-      imports: [LoggingModule.forRoot({})],
-    })
-      .overrideProvider(LOGGING_MODULE_OPTIONS)
-      .useValue({ destination: new ArrayStream(), defaultLevel: "trace" })
-      .compile()
+      imports: [
+        LoggingModule.forRoot({
+          destination: new ArrayStream(logs),
+          defaultLevel: LogLevel.Trace,
+        }),
+      ],
+    }).compile()
 
     service = module.get(ApplicationLogger)
-    logOptions = module.get(LOGGING_MODULE_OPTIONS)
-
-    mockedGetRequest.mockReturnValue(undefined)
-  })
-
-  afterEach(() => {
-    mockedGetRequest.mockReset()
   })
 
   describe("Default Configuration", () => {
-    it("should default to 'info' level when using forRoot({})", async () => {
-      const module: TestingModule = await Test.createTestingModule({
-        imports: [LoggingModule.forRoot({})],
+    describe("Given forRoot without a defaultLevel", () => {
+      it("should log at 'info' and above", async () => {
+        const defaultLogs: any[] = []
+        const module: TestingModule = await Test.createTestingModule({
+          imports: [
+            LoggingModule.forRoot({
+              destination: new ArrayStream(defaultLogs),
+            }),
+          ],
+        }).compile()
+
+        const defaultService = module.get(ApplicationLogger)
+        defaultService.debug(message)
+        defaultService.info(message)
+
+        expect(defaultLogs.map(({ level }) => level)).toEqual([
+          LogLevelNumber.info,
+        ])
       })
-        .overrideProvider(LOGGING_MODULE_OPTIONS)
-        .useValue({ destination: new ArrayStream() })
-        .compile()
-
-      const service = module.get(ApplicationLogger)
-
-      // Level-filtering behaviour is exhaustively covered in
-      // create-logger.spec.ts; this test asserts only that the *default*
-      // (no options) resolves to 'info' on the ApplicationLogger's underlying
-      // pino instance.
-      expect((service as any).pino.level).toBe("info")
-    })
-
-    it("should default to 'info' level when using forRoot() with no defaultLevel", async () => {
-      const module: TestingModule = await Test.createTestingModule({
-        imports: [LoggingModule.forRoot({ destination: new ArrayStream() })],
-      }).compile()
-
-      const service = module.get(ApplicationLogger)
-
-      // See sibling test: level filtering is covered by create-logger.spec.ts;
-      // this test only asserts the default-level resolution when the caller
-      // passes options without a defaultLevel.
-      expect((service as any).pino.level).toBe("info")
     })
   })
 
   describe("Logging Methods", () => {
     LogMethodTests.forEach(({ method: methodName, level }) => {
-      const method = methodName as keyof Pick<
-        ApplicationLogger,
-        "trace" | "debug" | "info" | "warn" | "error" | "fatal"
-      >
+      const method = methodName as LogMethod
       describe(method, () => {
         describe("When it's called outside a request context", () => {
           describe("When it's called with just a message", () => {
             it(`It should log the message at the ${method} level`, () => {
               service[method](message)
-              expect(
-                (logOptions.destination as ArrayStream).logs,
-              ).toContainEqual(expect.objectContaining({ level, msg: message }))
+              expect(logs).toContainEqual(
+                expect.objectContaining({ level, msg: message }),
+              )
             })
           })
 
           describe("When it's called with a context object", () => {
             it(`It should log the message and merge the context's properties at the ${method} level`, () => {
               service[method](message, context)
-              expect(
-                (logOptions.destination as ArrayStream).logs,
-              ).toContainEqual(
+              expect(logs).toContainEqual(
                 expect.objectContaining({ level, msg: message, ...context }),
-              )
-            })
-          })
-        })
-
-        describe("When it's called inside a request context", () => {
-          const path = `/${faker.lorem.slug()}`
-          const request = { ...express.request(), originalUrl: path }
-          beforeEach(() => {
-            mockedGetRequest.mockReturnValue(request as unknown as Request)
-          })
-
-          describe("When it's called with just a message", () => {
-            it(`It should log the message and the request at the ${method} level`, () => {
-              service[method](message)
-              expect(
-                (logOptions.destination as ArrayStream).logs,
-              ).toContainEqual(
-                expect.objectContaining({
-                  level,
-                  msg: message,
-                  req: expect.objectContaining({
-                    method: request.method,
-                    path,
-                  }),
-                }),
-              )
-            })
-          })
-
-          describe("When it's called with a context object", () => {
-            it(`It should log the message, merge the context, and include the request at the ${method} level`, () => {
-              service[method](message, context)
-              expect(
-                (logOptions.destination as ArrayStream).logs,
-              ).toContainEqual(
-                expect.objectContaining({
-                  level,
-                  msg: message,
-                  req: expect.objectContaining({
-                    method: request.method,
-                    path,
-                  }),
-                  ...context,
-                }),
               )
             })
           })
@@ -157,7 +92,7 @@ describe("ApplicationLogger", () => {
 
         service.error(message, { err })
 
-        expect((logOptions.destination as ArrayStream).logs).toContainEqual(
+        expect(logs).toContainEqual(
           expect.objectContaining({
             level: LogLevelNumber.error,
             msg: message,
@@ -176,7 +111,7 @@ describe("ApplicationLogger", () => {
 
         service.error(message, { err, ...extra })
 
-        expect((logOptions.destination as ArrayStream).logs).toContainEqual(
+        expect(logs).toContainEqual(
           expect.objectContaining({
             level: LogLevelNumber.error,
             msg: message,
@@ -191,7 +126,7 @@ describe("ApplicationLogger", () => {
   describe("Static delegates", () => {
     it("should route ApplicationLogger.info(...) through the constructed instance", () => {
       ApplicationLogger.info(message, context)
-      expect((logOptions.destination as ArrayStream).logs).toContainEqual(
+      expect(logs).toContainEqual(
         expect.objectContaining({
           level: LogLevelNumber.info,
           msg: message,
@@ -203,7 +138,7 @@ describe("ApplicationLogger", () => {
     it("should route ApplicationLogger.error(...) through the constructed instance", () => {
       const err = new Error(faker.hacker.phrase())
       ApplicationLogger.error(message, { err })
-      expect((logOptions.destination as ArrayStream).logs).toContainEqual(
+      expect(logs).toContainEqual(
         expect.objectContaining({
           level: LogLevelNumber.error,
           msg: message,
@@ -211,116 +146,187 @@ describe("ApplicationLogger", () => {
         }),
       )
     })
+  })
 
-    it("should include the request when the static delegate is called inside a request context", () => {
-      const path = `/${faker.lorem.slug()}`
-      const request = { ...express.request(), originalUrl: path }
-      mockedGetRequest.mockReturnValue(request as unknown as Request)
+  describe("When it's called inside a request", () => {
+    // Logs via the injected instance (`/log/:method`, with `?context` to pass
+    // the context object) or via the static delegate (`/static`).
+    @Controller()
+    class LogController {
+      public constructor(private readonly logger: ApplicationLogger) {}
 
-      ApplicationLogger.warn(message)
+      @Get("static")
+      public static(): void {
+        ApplicationLogger.warn(message)
+      }
 
-      expect((logOptions.destination as ArrayStream).logs).toContainEqual(
+      @Get("log/:method")
+      public log(
+        @Param("method") method: LogMethod,
+        @Query("context") withContext?: string,
+      ): void {
+        this.logger[method](message, withContext ? context : undefined)
+      }
+    }
+
+    let app: INestApplication
+    let requestLogs: any[]
+
+    beforeEach(async () => {
+      requestLogs = []
+      const module: TestingModule = await Test.createTestingModule({
+        imports: [
+          RequestContextModule.forRoot(),
+          LoggingModule.forRoot({
+            destination: new ArrayStream(requestLogs),
+            defaultLevel: LogLevel.Trace,
+          }),
+        ],
+        controllers: [LogController],
+      }).compile()
+      app = module.createNestApplication({ logger: false })
+      await app.init()
+    })
+
+    afterEach(async () => {
+      await app.close()
+    })
+
+    LogMethodTests.forEach(({ method, level }) => {
+      describe(method, () => {
+        it(`It should log the message and the request at the ${method} level`, async () => {
+          await request(app.getHttpServer() as App).get(`/log/${method}`)
+
+          expect(requestLogs).toContainEqual(
+            expect.objectContaining({
+              level,
+              msg: message,
+              req: expect.objectContaining({
+                method: "GET",
+                path: `/log/${method}`,
+              }),
+            }),
+          )
+        })
+
+        it(`It should log the message, merge the context, and include the request at the ${method} level`, async () => {
+          await request(app.getHttpServer() as App).get(
+            `/log/${method}?context=1`,
+          )
+
+          expect(requestLogs).toContainEqual(
+            expect.objectContaining({
+              level,
+              msg: message,
+              req: expect.objectContaining({ path: `/log/${method}` }),
+              ...context,
+            }),
+          )
+        })
+      })
+    })
+
+    it("should include the request when the static delegate is called", async () => {
+      await request(app.getHttpServer() as App).get("/static")
+
+      expect(requestLogs).toContainEqual(
         expect.objectContaining({
           level: LogLevelNumber.warn,
           msg: message,
-          req: expect.objectContaining({
-            method: request.method,
-            path,
-          }),
+          req: expect.objectContaining({ method: "GET", path: "/static" }),
         }),
       )
     })
   })
 
   describe("Log Level Filtering (defaultLevel)", () => {
-    const cases: Array<{ defaultLevel: any; expected: LogLevelNumber[] }> = [
-      {
-        defaultLevel: "trace",
-        expected: [
-          LogLevelNumber.trace,
-          LogLevelNumber.debug,
-          LogLevelNumber.info,
-          LogLevelNumber.warn,
-          LogLevelNumber.error,
-          LogLevelNumber.fatal,
-        ],
-      },
-      {
-        defaultLevel: "debug",
-        expected: [
-          LogLevelNumber.debug,
-          LogLevelNumber.info,
-          LogLevelNumber.warn,
-          LogLevelNumber.error,
-          LogLevelNumber.fatal,
-        ],
-      },
-      {
-        defaultLevel: "info",
-        expected: [
-          LogLevelNumber.info,
-          LogLevelNumber.warn,
-          LogLevelNumber.error,
-          LogLevelNumber.fatal,
-        ],
-      },
-      {
-        defaultLevel: "warn",
-        expected: [
-          LogLevelNumber.warn,
-          LogLevelNumber.error,
-          LogLevelNumber.fatal,
-        ],
-      },
-      {
-        defaultLevel: "error",
-        expected: [LogLevelNumber.error, LogLevelNumber.fatal],
-      },
-      { defaultLevel: "fatal", expected: [LogLevelNumber.fatal] },
-    ]
+    const cases: Array<{ defaultLevel: LogLevel; expected: LogLevelNumber[] }> =
+      [
+        {
+          defaultLevel: LogLevel.Trace,
+          expected: [
+            LogLevelNumber.trace,
+            LogLevelNumber.debug,
+            LogLevelNumber.info,
+            LogLevelNumber.warn,
+            LogLevelNumber.error,
+            LogLevelNumber.fatal,
+          ],
+        },
+        {
+          defaultLevel: LogLevel.Debug,
+          expected: [
+            LogLevelNumber.debug,
+            LogLevelNumber.info,
+            LogLevelNumber.warn,
+            LogLevelNumber.error,
+            LogLevelNumber.fatal,
+          ],
+        },
+        {
+          defaultLevel: LogLevel.Info,
+          expected: [
+            LogLevelNumber.info,
+            LogLevelNumber.warn,
+            LogLevelNumber.error,
+            LogLevelNumber.fatal,
+          ],
+        },
+        {
+          defaultLevel: LogLevel.Warn,
+          expected: [
+            LogLevelNumber.warn,
+            LogLevelNumber.error,
+            LogLevelNumber.fatal,
+          ],
+        },
+        {
+          defaultLevel: LogLevel.Error,
+          expected: [LogLevelNumber.error, LogLevelNumber.fatal],
+        },
+        { defaultLevel: LogLevel.Fatal, expected: [LogLevelNumber.fatal] },
+      ]
 
     cases.forEach(({ defaultLevel, expected }) => {
       it(`It should log at '${defaultLevel}' level and above when defaultLevel is '${defaultLevel}'`, async () => {
-        const logs: any[] = []
+        const levelLogs: any[] = []
         const module: TestingModule = await Test.createTestingModule({
           imports: [
             LoggingModule.forRoot({
-              destination: new ArrayStream(logs),
+              destination: new ArrayStream(levelLogs),
               defaultLevel,
             }),
           ],
         }).compile()
 
-        const service = module.get(ApplicationLogger)
+        const levelService = module.get(ApplicationLogger)
 
-        service.trace(message)
-        service.debug(message)
-        service.info(message)
-        service.warn(message)
-        service.error(message)
-        service.fatal(message)
+        levelService.trace(message)
+        levelService.debug(message)
+        levelService.info(message)
+        levelService.warn(message)
+        levelService.error(message)
+        levelService.fatal(message)
 
-        expect(logs.map((l: any) => l.level)).toEqual(expected)
+        expect(levelLogs.map((l: any) => l.level)).toEqual(expected)
       })
     })
   })
 
   describe("Static context configuration", () => {
-    const logs: any[] = []
-    const message = faker.hacker.phrase()
     const staticContext = {
       service: "test-service",
       version: "1.0.0",
       environment: "test",
     }
 
-    let service: ApplicationLogger
     beforeEach(async () => {
+      logs = []
       const module: TestingModule = await Test.createTestingModule({
         imports: [
           LoggingModule.forRoot({
             destination: new ArrayStream(logs),
-            defaultLevel: "trace",
+            defaultLevel: LogLevel.Trace,
             context: staticContext,
           }),
         ],
@@ -330,10 +336,7 @@ describe("ApplicationLogger", () => {
     })
 
     LogMethodTests.forEach(({ method: methodName, level }) => {
-      const method = methodName as keyof Pick<
-        ApplicationLogger,
-        "trace" | "debug" | "info" | "warn" | "error" | "fatal"
-      >
+      const method = methodName as LogMethod
       describe(method, () => {
         it(`It should include the configured context when logging a bare message at ${method} level`, () => {
           service[method](message)
@@ -377,17 +380,17 @@ describe("ApplicationLogger", () => {
 
     describe(`Given redaction is configured for the fields ${REDACTED_PATHS.join(", ")}`, () => {
       beforeEach(async () => {
+        logs = []
         const module: TestingModule = await Test.createTestingModule({
           imports: [
             LoggingModule.forRoot({
-              destination: new ArrayStream(),
+              destination: new ArrayStream(logs),
               redact: REDACTED_PATHS,
             }),
           ],
         }).compile()
 
         service = module.get(ApplicationLogger)
-        logOptions = module.get(LOGGING_MODULE_OPTIONS)
       })
 
       it("should redact the top level password field (password)", () => {
@@ -400,7 +403,7 @@ describe("ApplicationLogger", () => {
 
         service.info(message, event)
 
-        expect((logOptions.destination as ArrayStream).logs).toContainEqual(
+        expect(logs).toContainEqual(
           expect.objectContaining({
             username: event.username,
             email: event.email,
@@ -421,7 +424,7 @@ describe("ApplicationLogger", () => {
 
         service.info(message, event)
 
-        expect((logOptions.destination as ArrayStream).logs).toContainEqual(
+        expect(logs).toContainEqual(
           expect.objectContaining({
             username: event.username,
             googleCredentials: {
@@ -444,7 +447,7 @@ describe("ApplicationLogger", () => {
 
         service.info(message, event)
 
-        expect((logOptions.destination as ArrayStream).logs).toContainEqual(
+        expect(logs).toContainEqual(
           expect.objectContaining({
             name: event.name,
             job: {
@@ -473,7 +476,7 @@ describe("ApplicationLogger", () => {
 
         service.info(message, event)
 
-        expect((logOptions.destination as ArrayStream).logs).toContainEqual(
+        expect(logs).toContainEqual(
           expect.objectContaining({
             username: event.username,
             tokens: {
@@ -504,7 +507,7 @@ describe("ApplicationLogger", () => {
 
         service.info(message, event)
 
-        expect((logOptions.destination as ArrayStream).logs).toContainEqual(
+        expect(logs).toContainEqual(
           expect.objectContaining({
             name: event.name,
             medicalRecords: {
