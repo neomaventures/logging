@@ -10,8 +10,7 @@ import {
 import { Test, type TestingModule } from "@nestjs/testing"
 import { lastValueFrom, type Observable, of, throwError } from "rxjs"
 
-import { ApplicationLogger } from "../services/application-logger"
-import { LOGGING_MODULE_OPTIONS } from "../symbols"
+import { LOGGING_MODULE_OPTIONS, LOGGING_NAMESPACE } from "../symbols"
 import { MockLogger } from "../testing"
 
 import { RequestLoggerInterceptor } from "./request-logger.interceptor"
@@ -53,7 +52,7 @@ describe("RequestLoggerInterceptor", () => {
           providers: [
             RequestLoggerInterceptor,
             { provide: LOGGING_MODULE_OPTIONS, useValue: {} },
-            { provide: ApplicationLogger, useValue: logger },
+            { provide: LOGGING_NAMESPACE, useValue: logger },
           ],
         }).compile()
         interceptor = module.get(RequestLoggerInterceptor)
@@ -64,7 +63,7 @@ describe("RequestLoggerInterceptor", () => {
 
         await lastValueFrom(interceptor.intercept(ctx, handler))
 
-        expect(logger.debug).toHaveBeenNthCalledWith(
+        expect(logger.info).toHaveBeenNthCalledWith(
           1,
           "Processing an incoming request and dispatching it to a route handler.",
           expect.objectContaining(routeMetaData),
@@ -76,7 +75,7 @@ describe("RequestLoggerInterceptor", () => {
 
         await lastValueFrom(interceptor.intercept(ctx, handler))
 
-        expect(logger.debug).toHaveBeenNthCalledWith(
+        expect(logger.info).toHaveBeenNthCalledWith(
           2,
           "Processed an incoming request that was successfully handled by a route handler.",
           expect.objectContaining({
@@ -109,7 +108,7 @@ describe("RequestLoggerInterceptor", () => {
           providers: [
             RequestLoggerInterceptor,
             { provide: LOGGING_MODULE_OPTIONS, useValue: {} },
-            { provide: ApplicationLogger, useValue: logger },
+            { provide: LOGGING_NAMESPACE, useValue: logger },
           ],
         }).compile()
         interceptor = module.get(RequestLoggerInterceptor)
@@ -158,7 +157,7 @@ describe("RequestLoggerInterceptor", () => {
           providers: [
             RequestLoggerInterceptor,
             { provide: LOGGING_MODULE_OPTIONS, useValue: { logErrors: true } },
-            { provide: ApplicationLogger, useValue: logger },
+            { provide: LOGGING_NAMESPACE, useValue: logger },
           ],
         }).compile()
         interceptor = module.get(RequestLoggerInterceptor)
@@ -206,7 +205,7 @@ describe("RequestLoggerInterceptor", () => {
           providers: [
             RequestLoggerInterceptor,
             { provide: LOGGING_MODULE_OPTIONS, useValue: { logErrors: false } },
-            { provide: ApplicationLogger, useValue: logger },
+            { provide: LOGGING_NAMESPACE, useValue: logger },
           ],
         }).compile()
         interceptor = module.get(RequestLoggerInterceptor)

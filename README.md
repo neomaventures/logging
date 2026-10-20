@@ -150,14 +150,22 @@ Bound directly to `forRoot.defaultLevel` (default `'info'`). No override chain.
 ### Example
 
 ```ts
+import {
+  LOGGING_NAMESPACE,
+  LoggingModule,
+  LogLevel,
+} from "@neomaventures/logging"
+
 LoggingModule.forRoot({
   defaultLevel: LogLevel.Debug,
-  loggers: [{ namespace: "neomaventures:auth", level: LogLevel.Trace }],
+  loggers: [{ namespace: LOGGING_NAMESPACE, level: LogLevel.Info }],
 })
 ```
 
 - `ApplicationLogger` emits at `debug` and above.
-- The `neomaventures:auth` logger emits at `trace` and above.
+- The package's own request logger (`neomaventures:logging`) emits at `info`
+  and above, so handled requests are logged. See
+  [Request logging](#request-logging).
 - Every other namespaced logger floors at `error`.
 
 ### Silencing a namespaced logger
@@ -242,6 +250,33 @@ entry carries `res`. Both are reduced to the fields worth logging:
   `user-agent` and `x-request-id` on the request; `content-type` and
   `content-length` on the response. Cookies, `authorization`, `set-cookie` and
   everything else are never logged.
+
+## Request logging
+
+`forRoot()` registers a request logger that brackets every route handler with
+an entry when the request is dispatched and one when it completes. It logs under
+its own namespace, **`neomaventures:logging`**:
+
+- **Handled requests** are logged at `info`. Like every namespace it floors at
+  `error`, so they are **off by default** — raising your `defaultLevel` does not
+  turn them on.
+- **Failed requests** (the handler threw) are logged at `error`, so they are on
+  by default. Set `logErrors: false` to turn them off.
+
+To log handled requests, raise the namespace. It is exported as
+`LOGGING_NAMESPACE` so a typo can't silently miss it:
+
+```ts
+import {
+  LOGGING_NAMESPACE,
+  LoggingModule,
+  LogLevel,
+} from "@neomaventures/logging"
+
+LoggingModule.forRoot({
+  loggers: [{ namespace: LOGGING_NAMESPACE, level: LogLevel.Info }],
+})
+```
 
 ## Configuration
 

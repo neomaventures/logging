@@ -9,7 +9,7 @@ import {
 } from "./interfaces/logging-module-options.interface"
 import { ApplicationLogger } from "./services/application-logger"
 import { createLogger } from "./services/create-logger"
-import { LOGGING_MODULE_OPTIONS } from "./symbols"
+import { LOGGING_MODULE_OPTIONS, LOGGING_NAMESPACE } from "./symbols"
 
 const PROVIDERS: Provider[] = [
   ApplicationLogger,
@@ -53,6 +53,8 @@ export class LoggingModule {
     return {
       global: true,
       module: LoggingModule,
+      // The request logger's namespaced logger, registered like any package's.
+      imports: [LoggingModule.forFeature([LOGGING_NAMESPACE])],
       providers: [
         { provide: LOGGING_MODULE_OPTIONS, useValue: options },
         ...PROVIDERS,
@@ -83,7 +85,11 @@ export class LoggingModule {
     return {
       global: true,
       module: LoggingModule,
-      imports: options.imports ?? [],
+      imports: [
+        ...(options.imports ?? []),
+        // The request logger's namespaced logger, registered like any package's.
+        LoggingModule.forFeature([LOGGING_NAMESPACE]),
+      ],
       providers: [
         {
           provide: LOGGING_MODULE_OPTIONS,

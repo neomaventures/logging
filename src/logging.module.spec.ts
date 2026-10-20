@@ -3,6 +3,7 @@ import { RequestContextModule } from "@neomaventures/request-context"
 import {
   Controller,
   Get,
+  type INestApplication,
   Injectable,
   type MiddlewareConsumer,
   Module,
@@ -17,6 +18,7 @@ import {
   ApplicationLogger,
   InjectLogger,
   type Logger,
+  LOGGING_NAMESPACE,
   LoggingModule,
   LogLevel,
 } from "./index"
@@ -141,54 +143,125 @@ describe("LoggingModule", () => {
     })
   })
 
-  describe("request serialization", () => {
-    describe("Given a request to a route with a path parameter", () => {
-      const id = faker.string.uuid()
-      const secret = faker.string.alphanumeric(32)
-      let logs: any[]
+  describe("request logging", () => {
+    const namespace = "neomaventures:logging"
 
+    @Controller("widgets")
+    class WidgetsController {
+      @Get("fail")
+      public fail(): void {
+        throw new Error("handler failed")
+      }
+
+      @Get(":id")
+      public get(): void {}
+    }
+
+    // Logs from middleware, i.e. before Nest has routed the request.
+    @Module({ controllers: [WidgetsController] })
+    class WidgetsModule implements NestModule {
+      public configure(consumer: MiddlewareConsumer): void {
+        consumer
+          .apply((_req: unknown, _res: unknown, next: () => void) => {
+            ApplicationLogger.debug("middleware")
+            next()
+          })
+          .forRoutes("*")
+      }
+    }
+
+    let app: INestApplication
+    let logs: any[]
+
+    afterEach(async () => {
+      await app.close()
+    })
+
+    describe("Given no override for the request logger's namespace", () => {
       beforeEach(async () => {
         logs = []
-
-        @Controller("widgets")
-        class WidgetsController {
-          @Get(":id")
-          public get(): void {}
-        }
-
-        @Module({
+        const module = await Test.createTestingModule({
           imports: [
             RequestContextModule.forRoot(),
             LoggingModule.forRoot({
               destination: new ArrayStream(logs),
               defaultLevel: LogLevel.Debug,
             }),
+            WidgetsModule,
           ],
-          controllers: [WidgetsController],
-        })
-        class AppModule implements NestModule {
-          public configure(consumer: MiddlewareConsumer): void {
-            consumer
-              .apply((_req: unknown, _res: unknown, next: () => void) => {
-                ApplicationLogger.debug("middleware")
-                next()
-              })
-              .forRoutes("*")
-          }
-        }
-
-        const module = await Test.createTestingModule({
-          imports: [AppModule],
         }).compile()
-        const app = module.createNestApplication()
+        app = module.createNestApplication({ logger: false })
+        await app.init()
+      })
+
+      it("should not log handled requests, even with a debug defaultLevel", async () => {
+        await request(app.getHttpServer() as App).get(
+          `/widgets/${faker.string.uuid()}`,
+        )
+
+        // Only the request logger's completion entry carries `res`.
+        expect(logs).not.toContainEqual(
+          expect.objectContaining({ res: expect.anything() }),
+        )
+      })
+
+      it("should still log the app's own debug entries", async () => {
+        await request(app.getHttpServer() as App).get(
+          `/widgets/${faker.string.uuid()}`,
+        )
+
+        expect(logs).toContainEqual(
+          expect.objectContaining({ msg: "middleware" }),
+        )
+      })
+
+      it("should still log a request whose handler throws", async () => {
+        await request(app.getHttpServer() as App).get("/widgets/fail")
+
+        expect(logs).toContainEqual(
+          expect.objectContaining({
+            level: LogLevelNumber.error,
+            ns: namespace,
+            err: expect.objectContaining({ message: "handler failed" }),
+          }),
+        )
+      })
+    })
+
+    describe("Given the request logger's namespace is raised to info", () => {
+      const id = faker.string.uuid()
+      const secret = faker.string.alphanumeric(32)
+
+      beforeEach(async () => {
+        logs = []
+        const module = await Test.createTestingModule({
+          imports: [
+            RequestContextModule.forRoot(),
+            LoggingModule.forRoot({
+              destination: new ArrayStream(logs),
+              defaultLevel: LogLevel.Debug,
+              loggers: [{ namespace: LOGGING_NAMESPACE, level: LogLevel.Info }],
+            }),
+            WidgetsModule,
+          ],
+        }).compile()
+        app = module.createNestApplication({ logger: false })
         await app.init()
 
         await request(app.getHttpServer() as App)
           .get(`/widgets/${id}?code=${secret}`)
           .set("Cookie", `sid=${secret}`)
           .set("Accept", "application/json")
+      })
 
-        await app.close()
+      it("should log handled requests at info under its namespace", () => {
+        expect(logs).toContainEqual(
+          expect.objectContaining({
+            level: LogLevelNumber.info,
+            ns: namespace,
+            res: expect.objectContaining({ statusCode: 200 }),
+          }),
+        )
       })
 
       it("should log the path with its ids and without the query string from middleware", () => {
@@ -213,14 +286,6 @@ describe("LoggingModule", () => {
               path: `/widgets/${id}`,
               route: "/widgets/:id",
             }),
-          }),
-        )
-      })
-
-      it("should log the response status code", () => {
-        expect(logs).toContainEqual(
-          expect.objectContaining({
-            res: expect.objectContaining({ statusCode: 200 }),
           }),
         )
       })
