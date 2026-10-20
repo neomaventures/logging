@@ -1,3 +1,5 @@
+import os from "node:os"
+
 import { faker } from "@faker-js/faker"
 import { RequestContextModule } from "@neomaventures/request-context"
 import {
@@ -139,6 +141,168 @@ describe("LoggingModule", () => {
         ns.fatal("nope")
 
         expect(logs).toEqual([])
+      })
+    })
+  })
+
+  describe("forRoot + forFeature level precedence", () => {
+    describe("Given a forRoot override and a forFeature package default", () => {
+      it("should resolve to the forRoot override", async () => {
+        const logs: any[] = []
+        const namespace = `neomaventures:${faker.lorem.word()}`
+        const module = await Test.createTestingModule({
+          imports: [
+            LoggingModule.forRoot({
+              destination: new ArrayStream(logs),
+              loggers: [{ namespace, level: LogLevel.Debug }],
+            }),
+            LoggingModule.forFeature([{ namespace, level: LogLevel.Warn }]),
+          ],
+        }).compile()
+
+        module.get<Logger>(namespace).debug(faker.hacker.phrase())
+
+        expect(logs).toEqual([
+          expect.objectContaining({ level: LogLevelNumber.debug }),
+        ])
+      })
+    })
+
+    describe("Given only a forFeature package default", () => {
+      it("should resolve to the package default", async () => {
+        const logs: any[] = []
+        const namespace = `neomaventures:${faker.lorem.word()}`
+        const module = await Test.createTestingModule({
+          imports: [
+            LoggingModule.forRoot({ destination: new ArrayStream(logs) }),
+            LoggingModule.forFeature([{ namespace, level: LogLevel.Warn }]),
+          ],
+        }).compile()
+
+        const logger = module.get<Logger>(namespace)
+        logger.info(faker.hacker.phrase())
+        logger.warn(faker.hacker.phrase())
+
+        expect(logs).toEqual([
+          expect.objectContaining({ level: LogLevelNumber.warn }),
+        ])
+      })
+    })
+
+    describe("Given neither a forRoot override nor a package default", () => {
+      it("should floor at error", async () => {
+        const logs: any[] = []
+        const namespace = `neomaventures:${faker.lorem.word()}`
+        const module = await Test.createTestingModule({
+          imports: [
+            LoggingModule.forRoot({ destination: new ArrayStream(logs) }),
+            LoggingModule.forFeature([namespace]),
+          ],
+        }).compile()
+
+        const logger = module.get<Logger>(namespace)
+        logger.info(faker.hacker.phrase())
+        logger.warn(faker.hacker.phrase())
+        logger.error(faker.hacker.phrase())
+
+        expect(logs).toEqual([
+          expect.objectContaining({ level: LogLevelNumber.error }),
+        ])
+      })
+    })
+
+    describe("Given forRoot sets a defaultLevel", () => {
+      it("should NOT leak defaultLevel into namespaced loggers (regression)", async () => {
+        const logs: any[] = []
+        const namespace = `neomaventures:${faker.lorem.word()}`
+        const module = await Test.createTestingModule({
+          imports: [
+            LoggingModule.forRoot({
+              destination: new ArrayStream(logs),
+              defaultLevel: LogLevel.Debug,
+            }),
+            LoggingModule.forFeature([namespace]),
+          ],
+        }).compile()
+
+        const logger = module.get<Logger>(namespace)
+        logger.debug(faker.hacker.phrase())
+        logger.info(faker.hacker.phrase())
+        logger.warn(faker.hacker.phrase())
+        logger.error(faker.hacker.phrase())
+
+        expect(logs).toEqual([
+          expect.objectContaining({ level: LogLevelNumber.error }),
+        ])
+      })
+    })
+  })
+
+  describe("forFeature entry fields", () => {
+    describe("Given a forFeature logger with a name", () => {
+      it("should stamp the namespace as `ns` and the name as `name`", async () => {
+        const logs: any[] = []
+        const namespace = `neomaventures:${faker.lorem.word()}`
+        const name = faker.lorem.word()
+        const module = await Test.createTestingModule({
+          imports: [
+            LoggingModule.forRoot({ destination: new ArrayStream(logs) }),
+            LoggingModule.forFeature([{ namespace, name }]),
+          ],
+        }).compile()
+
+        module.get<Logger>(namespace).error(faker.hacker.phrase())
+
+        expect(logs).toEqual([expect.objectContaining({ ns: namespace, name })])
+      })
+    })
+  })
+
+  describe("forRoot base fields", () => {
+    describe("Given no context option", () => {
+      it("should keep pino's default pid and hostname fields", async () => {
+        const logs: any[] = []
+        const module = await Test.createTestingModule({
+          imports: [
+            LoggingModule.forRoot({ destination: new ArrayStream(logs) }),
+          ],
+        }).compile()
+
+        module.get(ApplicationLogger).info(faker.hacker.phrase())
+
+        expect(logs).toEqual([
+          expect.objectContaining({
+            pid: process.pid,
+            hostname: os.hostname(),
+          }),
+        ])
+      })
+    })
+
+    describe("Given a context option", () => {
+      it("should merge the context with pid and hostname on namespaced entries", async () => {
+        const logs: any[] = []
+        const namespace = `neomaventures:${faker.lorem.word()}`
+        const service = faker.lorem.word()
+        const module = await Test.createTestingModule({
+          imports: [
+            LoggingModule.forRoot({
+              destination: new ArrayStream(logs),
+              context: { service },
+            }),
+            LoggingModule.forFeature([namespace]),
+          ],
+        }).compile()
+
+        module.get<Logger>(namespace).error(faker.hacker.phrase())
+
+        expect(logs).toEqual([
+          expect.objectContaining({
+            pid: process.pid,
+            hostname: os.hostname(),
+            service,
+          }),
+        ])
       })
     })
   })
