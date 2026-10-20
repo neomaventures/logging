@@ -208,6 +208,41 @@ try {
 }
 ```
 
+## Request and response fields
+
+Entries made during a request carry `req`, and the request logger's completion
+entry carries `res`. Both are reduced to the fields worth logging:
+
+```json
+{
+  "req": {
+    "method": "GET",
+    "path": "/accounts/7f3a9c2e/ingestions",
+    "route": "/accounts/:id/ingestions",
+    "ip": "203.0.113.7",
+    "headers": {
+      "accept": "text/html",
+      "user-agent": "Mozilla/5.0 …",
+      "x-request-id": "b1946ac9"
+    }
+  },
+  "res": {
+    "statusCode": 200,
+    "headers": { "content-type": "text/html; charset=utf-8" }
+  }
+}
+```
+
+- **`path`** is the request path with its ids and **without the query string**,
+  which can carry secrets such as OAuth codes. It is correct in middleware too.
+- **`route`** is the matched route pattern, for grouping by endpoint. It is only
+  present once Nest has routed the request, so entries made in middleware omit
+  it.
+- **`headers`** are allow-listed: `accept`, `content-type`, `content-length`,
+  `user-agent` and `x-request-id` on the request; `content-type` and
+  `content-length` on the response. Cookies, `authorization`, `set-cookie` and
+  everything else are never logged.
+
 ## Configuration
 
 ```ts
@@ -313,34 +348,6 @@ const module = await Test.createTestingModule({
 ## Known limitations
 
 Tracked for a later release. Read these before depending on the package.
-
-### The whole request object is attached to every entry
-
-`getRequest()` returns the live Express request and it is attached verbatim as
-`req`, with no pino serializer configured. Two consequences:
-
-1. **Entries are large.** The full request — headers, socket details and all —
-   is stringified on every line, not the method/url summary you probably want.
-2. **Credentials are logged by default.** `redact` defaults to `[]`, so
-   `req.headers.cookie` and `req.headers.authorization` reach your log
-   aggregator in clear text.
-
-Until this is fixed, set `redact` explicitly:
-
-```ts
-LoggingModule.forRoot({
-  redact: [
-    "req.headers.cookie",
-    "req.headers.authorization",
-    "req.headers['set-cookie']",
-  ],
-})
-```
-
-The fix is to apply `pino.stdSerializers.req` (or a narrower project-specific
-serializer) by default, so `req` reduces to `method`, `url`, `headers`,
-`remoteAddress` and `remotePort`. That changes the shape of emitted logs, so it
-is a breaking change and is deliberately not in this release.
 
 ### Namespace matching is exact, and silent when it misses
 

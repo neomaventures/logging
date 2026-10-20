@@ -1,7 +1,17 @@
 import { faker } from "@faker-js/faker"
-import { Injectable, Module } from "@nestjs/common"
+import { RequestContextModule } from "@neomaventures/request-context"
+import {
+  Controller,
+  Get,
+  Injectable,
+  type MiddlewareConsumer,
+  Module,
+  type NestModule,
+} from "@nestjs/common"
 import { Test } from "@nestjs/testing"
 import { ArrayStream, LogLevelNumber } from "fixtures/logging"
+import request from "supertest"
+import { type App } from "supertest/types"
 
 import {
   ApplicationLogger,
@@ -127,6 +137,106 @@ describe("LoggingModule", () => {
         ns.fatal("nope")
 
         expect(logs).toEqual([])
+      })
+    })
+  })
+
+  describe("request serialization", () => {
+    describe("Given a request to a route with a path parameter", () => {
+      const id = faker.string.uuid()
+      const secret = faker.string.alphanumeric(32)
+      let logs: any[]
+
+      beforeEach(async () => {
+        logs = []
+
+        @Controller("widgets")
+        class WidgetsController {
+          @Get(":id")
+          public get(): void {}
+        }
+
+        @Module({
+          imports: [
+            RequestContextModule.forRoot(),
+            LoggingModule.forRoot({
+              destination: new ArrayStream(logs),
+              defaultLevel: LogLevel.Debug,
+            }),
+          ],
+          controllers: [WidgetsController],
+        })
+        class AppModule implements NestModule {
+          public configure(consumer: MiddlewareConsumer): void {
+            consumer
+              .apply((_req: unknown, _res: unknown, next: () => void) => {
+                ApplicationLogger.debug("middleware")
+                next()
+              })
+              .forRoutes("*")
+          }
+        }
+
+        const module = await Test.createTestingModule({
+          imports: [AppModule],
+        }).compile()
+        const app = module.createNestApplication()
+        await app.init()
+
+        await request(app.getHttpServer() as App)
+          .get(`/widgets/${id}?code=${secret}`)
+          .set("Cookie", `sid=${secret}`)
+          .set("Accept", "application/json")
+
+        await app.close()
+      })
+
+      it("should log the path with its ids and without the query string from middleware", () => {
+        expect(logs).toContainEqual(
+          expect.objectContaining({
+            msg: "middleware",
+            req: expect.objectContaining({ path: `/widgets/${id}` }),
+          }),
+        )
+      })
+
+      it("should not log the matched route from middleware", () => {
+        const entry = logs.find(({ msg }) => msg === "middleware")
+
+        expect(entry.req).not.toHaveProperty("route")
+      })
+
+      it("should log the matched route pattern once routed", () => {
+        expect(logs).toContainEqual(
+          expect.objectContaining({
+            req: expect.objectContaining({
+              path: `/widgets/${id}`,
+              route: "/widgets/:id",
+            }),
+          }),
+        )
+      })
+
+      it("should log the response status code", () => {
+        expect(logs).toContainEqual(
+          expect.objectContaining({
+            res: expect.objectContaining({ statusCode: 200 }),
+          }),
+        )
+      })
+
+      it("should log only allow-listed headers", () => {
+        expect(logs).toContainEqual(
+          expect.objectContaining({
+            req: expect.objectContaining({
+              headers: expect.objectContaining({ accept: "application/json" }),
+            }),
+          }),
+        )
+      })
+
+      it("should never log the cookie or query string", () => {
+        expect(JSON.stringify(logs)).not.toContain(secret)
       })
     })
   })

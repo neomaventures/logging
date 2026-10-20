@@ -105,7 +105,8 @@ describe("ApplicationLogger", () => {
         })
 
         describe("When it's called inside a request context", () => {
-          const request = express.request()
+          const path = `/${faker.lorem.slug()}`
+          const request = { ...express.request(), originalUrl: path }
           beforeEach(() => {
             mockedGetRequest.mockReturnValue(request as unknown as Request)
           })
@@ -121,7 +122,7 @@ describe("ApplicationLogger", () => {
                   msg: message,
                   req: expect.objectContaining({
                     method: request.method,
-                    url: request.url,
+                    path,
                   }),
                 }),
               )
@@ -139,7 +140,7 @@ describe("ApplicationLogger", () => {
                   msg: message,
                   req: expect.objectContaining({
                     method: request.method,
-                    url: request.url,
+                    path,
                   }),
                   ...context,
                 }),
@@ -212,7 +213,8 @@ describe("ApplicationLogger", () => {
     })
 
     it("should include the request when the static delegate is called inside a request context", () => {
-      const request = express.request()
+      const path = `/${faker.lorem.slug()}`
+      const request = { ...express.request(), originalUrl: path }
       mockedGetRequest.mockReturnValue(request as unknown as Request)
 
       ApplicationLogger.warn(message)
@@ -223,7 +225,7 @@ describe("ApplicationLogger", () => {
           msg: message,
           req: expect.objectContaining({
             method: request.method,
-            url: request.url,
+            path,
           }),
         }),
       )
