@@ -316,58 +316,46 @@ the standard async options: `useFactory` (with `imports` / `inject`),
 
 ## Testing
 
-Use `ArrayStream` from the shipped fixtures to capture log output in memory:
+Use `MockLogger` from the `/testing` export when unit-testing a service that
+injects `ApplicationLogger`. It provides Jest mocks for each log level, so you
+can assert on the message and structured context without capturing formatted
+output:
 
 ```ts
+import { Injectable } from "@nestjs/common"
 import { Test } from "@nestjs/testing"
-import { ApplicationLogger, LoggingModule } from "@neomaventures/logging"
-import { RequestContextModule } from "@neomaventures/request-context"
-import { ArrayStream } from "@neomaventures/logging/fixtures"
+import { ApplicationLogger, InjectLogger } from "@neomaventures/logging"
+import { MockLogger } from "@neomaventures/logging/testing"
 
-describe("UsersService", () => {
-  const logs: any[] = []
-  let logger: ApplicationLogger
+@Injectable()
+class UsersService {
+  public constructor(
+    @InjectLogger() private readonly logger: ApplicationLogger,
+  ) {}
 
-  beforeEach(async () => {
-    const module = await Test.createTestingModule({
-      imports: [
-        RequestContextModule.forRoot(),
-        LoggingModule.forRoot({ destination: new ArrayStream(logs) }),
-      ],
-    }).compile()
-
-    logger = module.get(ApplicationLogger)
-  })
-
-  it("logs structured fields", () => {
-    logger.info("user created", { userId: "123" })
-
-    expect(logs).toContainEqual(
-      expect.objectContaining({
-        level: 30,
-        msg: "user created",
-        userId: "123",
-      }),
-    )
-  })
-})
-```
-
-For unit specs that don't need the full module, override the provider with a mock:
-
-```ts
-const mockLogger = {
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn() /* ... */,
+  public createUser(): void {
+    this.logger.info("user created", { code: "users.create" })
+  }
 }
 
-const module = await Test.createTestingModule({
-  providers: [
-    UsersService,
-    { provide: ApplicationLogger, useValue: mockLogger },
-  ],
-}).compile()
+it("logs user creation", async () => {
+  const module = await Test.createTestingModule({
+    providers: [
+      UsersService,
+      { provide: ApplicationLogger, useClass: MockLogger },
+    ],
+  }).compile()
+
+  const service = module.get(UsersService)
+  const logger = module.get<MockLogger>(ApplicationLogger)
+
+  service.createUser()
+
+  expect(logger.info).toHaveBeenCalledExactlyOnceWith(
+    "user created",
+    expect.objectContaining({ code: "users.create" }),
+  )
+})
 ```
 
 ## Requirements
