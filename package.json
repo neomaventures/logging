@@ -1,6 +1,6 @@
 {
   "name": "@neomaventures/logging",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Pino-backed logging for NestJS — an injectable Logger interface, per-request correlation without request scope, and a mock for tests.",
   "type": "commonjs",
   "author": "Daniel Bruce",
