@@ -70,6 +70,19 @@ const { ConfigurableModuleClass } =
 @Module({})
 export class LoggingModule extends ConfigurableModuleClass {
   /**
+   * Namespace the package's own request logger emits under. Raise it to log
+   * handled requests.
+   *
+   * @example
+   * ```ts
+   * LoggingModule.forRoot({
+   *   loggers: [{ namespace: LoggingModule.LogNamespace, level: LogLevel.Info }],
+   * })
+   * ```
+   */
+  public static readonly LogNamespace = LOGGING_NAMESPACE
+
+  /**
    * Register one or more namespaced loggers for a feature module or package.
    *
    * Each entry produces a non-global provider keyed by the **namespace string

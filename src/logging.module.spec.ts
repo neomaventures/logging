@@ -21,7 +21,6 @@ import {
   ApplicationLogger,
   InjectLogger,
   type Logger,
-  LOGGING_NAMESPACE,
   LoggingModule,
   LogLevel,
 } from "./index"
@@ -455,7 +454,9 @@ describe("LoggingModule", () => {
             LoggingModule.forRoot({
               destination: new ArrayStream(logs),
               defaultLevel: LogLevel.Debug,
-              loggers: [{ namespace: LOGGING_NAMESPACE, level: LogLevel.Info }],
+              loggers: [
+                { namespace: LoggingModule.LogNamespace, level: LogLevel.Info },
+              ],
             }),
             WidgetsModule,
           ],
