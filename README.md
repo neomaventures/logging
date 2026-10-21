@@ -150,15 +150,11 @@ Bound directly to `forRoot.defaultLevel` (default `'info'`). No override chain.
 ### Example
 
 ```ts
-import {
-  LOGGING_NAMESPACE,
-  LoggingModule,
-  LogLevel,
-} from "@neomaventures/logging"
+import { LoggingModule, LogLevel } from "@neomaventures/logging"
 
 LoggingModule.forRoot({
   defaultLevel: LogLevel.Debug,
-  loggers: [{ namespace: LOGGING_NAMESPACE, level: LogLevel.Info }],
+  loggers: [{ namespace: LoggingModule.LogNamespace, level: LogLevel.Info }],
 })
 ```
 
@@ -263,18 +259,14 @@ its own namespace, **`neomaventures:logging`**:
 - **Failed requests** (the handler threw) are logged at `error`, so they are on
   by default. Set `logErrors: false` to turn them off.
 
-To log handled requests, raise the namespace. It is exported as
-`LOGGING_NAMESPACE` so a typo can't silently miss it:
+To log handled requests, raise the namespace. It is available as
+`LoggingModule.LogNamespace` so a typo can't silently miss it:
 
 ```ts
-import {
-  LOGGING_NAMESPACE,
-  LoggingModule,
-  LogLevel,
-} from "@neomaventures/logging"
+import { LoggingModule, LogLevel } from "@neomaventures/logging"
 
 LoggingModule.forRoot({
-  loggers: [{ namespace: LOGGING_NAMESPACE, level: LogLevel.Info }],
+  loggers: [{ namespace: LoggingModule.LogNamespace, level: LogLevel.Info }],
 })
 ```
 

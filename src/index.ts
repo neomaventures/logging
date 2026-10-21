@@ -18,6 +18,3 @@ export { ApplicationLogger } from "./services/application-logger"
 
 // DI helpers
 export { InjectLogger } from "./decorators/inject-logger.decorator"
-
-// Namespaces
-export { LOGGING_NAMESPACE } from "./symbols"
